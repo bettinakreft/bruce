@@ -11,6 +11,7 @@
 #include "modules/rf/rf_spectrum.h"
 #include "modules/rf/rf_utils.h"
 #include "modules/rf/rf_waterfall.h"
+#include "modules/rf/rf_protopirate.h"
 
 void RFMenu::optionsMenu() {
     while (true) {
@@ -20,6 +21,7 @@ void RFMenu::optionsMenu() {
 #if !defined(LITE_VERSION)
             {"Record RAW",      rf_raw_record             }, // Pablo-Ortiz-Lopez
             {"Custom SubGhz",   sendCustomRF              },
+        {"ProtoPirate",     rf_protopirate            },
 #endif
             {"Spectrum",        rf_spectrum               },
 #if !defined(LITE_VERSION)
