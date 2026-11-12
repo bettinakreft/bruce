@@ -229,8 +229,16 @@ void setup_gpio() {
     // init setup from /ports/*/interface.h
     _setup_gpio();
 
-    // Smoochiee v2 uses a AW9325 tro control GPS, MIC, Vibro and CC1101 RX/TX powerlines
-    ioExpander.init(IO_EXPANDER_ADDRESS, &Wire);
+    // Freeze the board's generic wiring so post-storage hooks can tell their own defaults
+    // apart from values loaded from /brucePins.conf (see applyBoardDefault() in configPins.h).
+    brucePinsSetupDefaults = bruceConfigPins;
+
+    // IO expander (AW9523/PCA9555: Smoochiee, Reaper, T-Lora Pager, Mako, Pebble) switching GPS,
+    // MIC, Vibro, CC1101 RX/TX, NFC... powerlines. It is an onboard peripheral, so it lives on the
+    // sys_i2c bus each board registers in _setup_gpio() via setSysI2CBus(); &Wire only for a board
+    // that never declared sys_i2c.
+    bool hasSysI2C = bruceConfigPins.sys_i2c.sda >= 0 && bruceConfigPins.sys_i2c.scl >= 0;
+    ioExpander.init(IO_EXPANDER_ADDRESS, hasSysI2C ? getSysI2CBus() : &Wire);
 
     initCC1101once(acquireSPIBus(
         bruceConfigPins.CC1101_bus.sck, bruceConfigPins.CC1101_bus.miso, bruceConfigPins.CC1101_bus.mosi
