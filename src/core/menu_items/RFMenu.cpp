@@ -6,33 +6,33 @@
 #include "modules/rf/rf_bruteforce.h"
 #include "modules/rf/rf_jammer.h"
 #include "modules/rf/rf_listen.h"
+#include "modules/rf/rf_protopirate.h"
 #include "modules/rf/rf_scan.h"
 #include "modules/rf/rf_send.h"
 #include "modules/rf/rf_spectrum.h"
 #include "modules/rf/rf_utils.h"
 #include "modules/rf/rf_waterfall.h"
-#include "modules/rf/rf_protopirate.h"
 
 void RFMenu::optionsMenu() {
     while (true) {
         bool openConfig = false;
         options = {
-            {"Scan/copy",       [=]() { RFScan(); }       },
+            {"Scan/copy",       [=]() { RFScan(); }         },
 #if !defined(LITE_VERSION)
-            {"Record RAW",      rf_raw_record             }, // Pablo-Ortiz-Lopez
-            {"Custom SubGhz",   sendCustomRF              },
-        {"ProtoPirate",     rf_protopirate            },
+            {"ProtoPirate",     rf_protopirate              },
+            {"Record RAW",      rf_raw_record               }, // Pablo-Ortiz-Lopez
+            {"Custom SubGhz",   sendCustomRF                },
 #endif
-            {"Spectrum",        rf_spectrum               },
+            {"Spectrum",        rf_spectrum                 },
 #if !defined(LITE_VERSION)
-            {"RSSI Spectrum",   rf_CC1101_rssi            }, // @Pirata
-            {"SquareWave Spec", rf_SquareWave             }, // @Pirata
-            {"Spectogram",      rf_waterfall              }, // dev_eclipse
+            {"RSSI Spectrum",   rf_CC1101_rssi              }, // @Pirata
+            {"SquareWave Spec", rf_SquareWave               }, // @Pirata
+            {"Spectogram",      rf_waterfall                }, // dev_eclipse
 #if defined(RF_LISTEN_H)
-            {"Listen",          rf_listen                 }, // dev_eclipse
+            {"Listen",          rf_listen                   }, // dev_eclipse
 #endif
-            {"Bruteforce",      rf_bruteforce             }, // dev_eclipse
-            {"Jammer",          [=]() { RFJammer(true); } },
+            {"Bruteforce",      rf_bruteforce               }, // dev_eclipse
+            {"Jammer",          [=]() { RFJammer(true); }   },
 #endif
             {"Config",          [&]() { openConfig = true; }},
         };
@@ -42,8 +42,7 @@ void RFMenu::optionsMenu() {
         String txt = "Radio Frequency";
         if (bruceConfigPins.rfModule == CC1101_SPI_MODULE)
             txt += " (CC1101)"; // Indicates if CC1101 is connected
-        else
-            txt += " Tx: " + String(bruceConfigPins.rfTx) + " Rx: " + String(bruceConfigPins.rfRx);
+        else txt += " Tx: " + String(bruceConfigPins.rfTx) + " Rx: " + String(bruceConfigPins.rfRx);
 
         int selected = loopOptions(options, MENU_TYPE_SUBMENU, txt.c_str());
         if (selected < 0 || returnToMenu) return;

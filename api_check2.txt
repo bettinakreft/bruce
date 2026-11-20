@@ -1,0 +1,45 @@
+22: // Set once by MainMenu's constructor. Lets loopOptions() offer a page-up/page-down tap zone for
+144: void displayError(const String &txt, bool waitKeyPress = false);    // Red Stripe
+178: // loopOptions will now return the last index used in the function
+179: int loopOptions(
+183: inline int loopOptions(std::vector<Option> &options, int _index) {
+184:     return loopOptions(options, MENU_TYPE_REGULAR, "", _index, false);
+186: inline int loopOptions(std::vector<Option> &options) {
+187:     return loopOptions(options, MENU_TYPE_REGULAR, "", 0, false);
+198: void drawMainBorder(bool clear = true);
+199: void drawMainBorderWithTitle(const String &title, bool clear = true);
+200: void printTitle(const String &title);
+--- sd_functions.h exists: True
+--- mykeyboard.h ---
+#pragma once
+#include "display.h"
+#include <globals.h>
+
+String keyboard(
+    const String &mytext, int maxSize = 76, const String &msg = "Type your message:", bool mask_input = false
+);
+String hex_keyboard(
+    const String &mytext, int maxSize = 76, const String &msg = "Type you HEX value:", bool mask_input = false
+);
+String num_keyboard(
+    const String &mytext, int maxSize = 76, const String &msg = "Insert your number:", bool mask_input = false
+);
+
+// Opens a menu to pick the keyboard language and saves the choice to bruceConfig
+void setKeyboardLanguage();
+
+void __attribute__((weak)) powerOff();
+void __attribute__((weak)) goToDeepSleep();
+
+void __attribute__((weak)) checkReboot();
+
+// Shortcut logic
+
+keyStroke _getKeyPress(); // This function must be implemented in the interface.h of the device, in order to
+                          // return the key pressed to use as shortcut or input in keyboard environment
+                          // by using the flag HAS_KEYBOARD
+
+// Core functions, depends on the implementation of the funtions above in the interface.h
+bool checkShortcutPress();
+int checkNumberShortcutPress();
+char checkLetterShortcutPress();

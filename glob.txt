@@ -1,0 +1,17 @@
+180: extern bool returnToMenu; // variable to check and break loops to return to main menu
+192: extern volatile bool NextPress;
+194: extern volatile bool PrevPress;
+196: extern volatile bool UpPress;
+198: extern volatile bool DownPress;
+200: extern volatile bool SelPress;
+202: extern volatile bool EscPress;
+204: extern volatile bool AnyKeyPress;
+212: extern volatile bool SerialCmdPress;
+214: extern volatile int forceMenuOption;
+224: // Net pending rotary encoder steps, independent from NextPress/PrevPress,
+248:     // NextPress/PrevPress here are rotary-encoder-derived, not raw mechanical
+251:     if (&btn == &NextPress || &btn == &PrevPress) {
+254:             AnyKeyPress = false;
+255:             SerialCmdPress = false;
+263:         AnyKeyPress = false;
+264:         SerialCmdPress = false;

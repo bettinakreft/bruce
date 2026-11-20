@@ -47,7 +47,6 @@ INCLUDES = [
     'mic_js',
     'notification_js',
     'nrf24_js',
-    'rfid_js',
     'runtime_js',
     'serial_js',
     'storage_js',
@@ -110,8 +109,9 @@ def _normalize_option_value(value) -> str:
 def compute_signature():
     # Any change here should force a rebuild.
     parts = []
-    parts.append("v=3")
+    parts.append("v=4")
     parts.append(f"watch_sha256={sha256_file(WATCH_FILE)}")
+    parts.append(f"disable_rfid={_has_define('DISABLE_RFID')}")
 
     mqjs_build_c = os.path.join(MQJS_PATH, "mquickjs_build.c")
     parts.append(f"mquickjs_build_sha256={sha256_file(mqjs_build_c)}")
@@ -186,7 +186,14 @@ def generate_headers():
             sub_env["PATH"] = cc_dir + os.pathsep + sub_env.get("PATH", "")
 
         gcc_result = subprocess.run(
-            [host_cc, *CFLAGS, "-o", GEN, *SRC],
+            [
+                host_cc,
+                *CFLAGS,
+                *(["-DDISABLE_RFID"] if _has_define("DISABLE_RFID") else []),
+                "-o",
+                GEN,
+                *SRC,
+            ],
             capture_output=True,
             text=True,
             env=sub_env,
@@ -209,6 +216,8 @@ def generate_headers():
             result = subprocess.run([GEN, "-m32"], capture_output=True, text=True, check=True, env=sub_env)
             for line in INCLUDES:
                 f.write(f'#include "{line}.h"\n')
+            if not _has_define("DISABLE_RFID"):
+                f.write('#include "rfid_js.h"\n')
             f.write("\n")
             f.write(result.stdout)
 

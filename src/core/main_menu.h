@@ -4,18 +4,27 @@
 #include <MenuItemInterface.h>
 
 #include "menu_items/BleMenu.h"
+#include "menu_items/Bw16Menu.h"
 #include "menu_items/ClockMenu.h"
 #include "menu_items/ConfigMenu.h"
 #include "menu_items/ConnectMenu.h"
+#if !defined(LITE_VERSION) && !defined(DISABLE_ETHERNET)
 #include "menu_items/EthernetMenu.h"
+#endif
+#if !defined(DISABLE_FM)
 #include "menu_items/FMMenu.h"
+#endif
 #include "menu_items/FileMenu.h"
+#ifndef DISABLE_GPS
 #include "menu_items/GpsMenu.h"
+#endif
 #include "menu_items/IRMenu.h"
 #include "menu_items/LoRaMenu.h"
 #include "menu_items/NRF24.h"
 #include "menu_items/OthersMenu.h"
+#ifndef DISABLE_RFID
 #include "menu_items/RFIDMenu.h"
+#endif
 #include "menu_items/RFMenu.h"
 #include "menu_items/ScriptsMenu.h"
 #include "menu_items/WifiMenu.h"
@@ -24,21 +33,30 @@ class MainMenu {
 public:
     FileMenu fileMenu;
     BleMenu bleMenu;
+    Bw16Menu bw16Menu;
     ClockMenu clockMenu;
     ConnectMenu connectMenu;
     ConfigMenu configMenu;
+#ifndef DISABLE_FM
     FMMenu fmMenu;
+#endif
+#ifndef DISABLE_GPS
     GpsMenu gpsMenu;
+#endif
     IRMenu irMenu;
     NRF24Menu nrf24Menu;
     OthersMenu othersMenu;
+#ifndef DISABLE_RFID
     RFIDMenu rfidMenu;
+#endif
     RFMenu rfMenu;
     ScriptsMenu scriptsMenu;
     WifiMenu wifiMenu;
 #if !defined(LITE_VERSION)
     LoRaMenu loraMenu;
+#ifndef DISABLE_ETHERNET
     EthernetMenu ethernetMenu;
+#endif
     WireToolsMenu wireToolsMenu;
 #endif
 

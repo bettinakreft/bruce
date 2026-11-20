@@ -1,0 +1,37 @@
+== src/core/mykeyboard.h lines=32
+   forceMenuOption = 0
+   returnToMenu = 0
+   getMaxVisibleLines = 0
+   drawMainBorder = 0
+   printTitle = 0
+   displayError = 0
+   loopOptions = 0
+   clearNavigation = 0
+== src/core/display.h lines=500
+   forceMenuOption = 0
+   returnToMenu = 0
+   getMaxVisibleLines = 0
+   drawMainBorder = 2
+   printTitle = 1
+   displayError = 1
+   loopOptions = 7
+   clearNavigation = 0
+== src/core/mykeyboard.cpp lines=1457
+   forceMenuOption = 0
+   returnToMenu = 0
+   getMaxVisibleLines = 0
+   drawMainBorder = 0
+   printTitle = 0
+   displayError = 0
+   loopOptions = 1
+   clearNavigation = 0
+== src/main.cpp lines=623
+   forceMenuOption = 1
+   returnToMenu = 1
+   getMaxVisibleLines = 0
+   drawMainBorder = 0
+   printTitle = 0
+   displayError = 0
+   loopOptions = 0
+   clearNavigation = 0
+scrollable getMaxVisibleLines = 0

@@ -1,0 +1,70 @@
+136: bool wakeUpScreen();
+137: 
+138: void displayRedStripe(const String &text, uint16_t fgcolor = TFT_WHITE, uint16_t bgcolor = TFT_RED);
+139: 
+140: int8_t displayMessage(
+141:     const char *message, const char *leftButton, const char *centerButton, const char *rightButton,
+142:     uint16_t color
+143: );
+144: void displayError(const String &txt, bool waitKeyPress = false);    // Red Stripe
+145: void displayWarning(const String &txt, bool waitKeyPress = false);  // Yellow Stripe
+146: void displayInfo(const String &txt, bool waitKeyPress = false);     // Blue Stripe
+147: void displaySuccess(const String &txt, bool waitKeyPress = false);  // Green Strupe
+148: void displayTextLine(const String &txt, bool waitKeyPress = false); // UI Colored stripe
+149: void setPadCursor(int16_t padx = 1, int16_t pady = 0);
+150: 
+151: void padprintf(int16_t padx, const char *format, ...);
+152: void padprintf(const char *format, ...);
+153: 
+154: void padprint(const String &s, int16_t padx = 1);
+155: void padprint(const char str[], int16_t padx = 1);
+156: void padprint(char c, int16_t padx = 1);
+157: void padprint(unsigned char b, int base = DEC, int16_t padx = 1);
+158: void padprint(int n, int base = DEC, int16_t padx = 1);
+159: void padprint(unsigned int n, int base = DEC, int16_t padx = 1);
+160: void padprint(long n, int base = DEC, int16_t padx = 1);
+161: void padprint(unsigned long n, int base = DEC, int16_t padx = 1);
+162: void padprint(long long n, int base = DEC, int16_t padx = 1);
+163: void padprint(unsigned long long n, int base = DEC, int16_t padx = 1);
+164: void padprint(double n, int digits, int16_t padx = 1);
+165: 
+166: void padprintln(const String &s, int16_t padx = 1);
+167: void padprintln(const char str[], int16_t padx = 1);
+168: void padprintln(char c, int16_t padx = 1);
+169: void padprintln(unsigned char b, int base = DEC, int16_t padx = 1);
+170: void padprintln(int n, int base = DEC, int16_t padx = 1);
+171: void padprintln(unsigned int n, int base = DEC, int16_t padx = 1);
+172: void padprintln(long n, int base = DEC, int16_t padx = 1);
+173: void padprintln(unsigned long n, int base = DEC, int16_t padx = 1);
+174: void padprintln(long long n, int base = DEC, int16_t padx = 1);
+175: void padprintln(unsigned long long n, int base = DEC, int16_t padx = 1);
+176: void padprintln(double n, int digits, int16_t padx = 1);
+177: 
+178: // loopOptions will now return the last index used in the function
+179: int loopOptions(
+180:     std::vector<Option> &options, uint8_t menuType, const char *subText, int index = 0,
+181:     bool interpreter = false, bool letterShortcuts = false, uint16_t pageJumpSize = 0, bool border = true
+182: );
+183: inline int loopOptions(std::vector<Option> &options, int _index) {
+184:     return loopOptions(options, MENU_TYPE_REGULAR, "", _index, false);
+185: }
+186: inline int loopOptions(std::vector<Option> &options) {
+187:     return loopOptions(options, MENU_TYPE_REGULAR, "", 0, false);
+188: }
+189: 
+190: Opt_Coord drawOptions(
+191:     int index, std::vector<Option> &options, uint16_t fgcolor, uint16_t selcolor, uint16_t bgcolor,
+192:     bool firstRender = true, bool border = true
+193: );
+194: 
+195: void drawSubmenu(int index, std::vector<Option> &options, const char *title);
+196: 
+197: void drawStatusBar();
+198: void drawMainBorder(bool clear = true);
+199: void drawMainBorderWithTitle(const String &title, bool clear = true);
+200: void printTitle(const String &title);
+201: void printSubtitle(const String &subtitle, bool withLine = true);
+202: void printFootnote(const String &text);
+203: void printCenterFootnote(const String &text);
+204: 
+205: void drawWireguardStatus(int x, int y);

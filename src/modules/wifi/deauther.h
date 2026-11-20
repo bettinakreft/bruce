@@ -42,6 +42,9 @@ void runDeauthTargetList(const std::vector<Host> &targets, uint8_t *targetMAC, i
 // Client sniffer callback
 void clientSnifferCallback(void *buf, wifi_promiscuous_pkt_type_t type);
 
+// Passively monitor client management frames directed to a selected AP.
+void passiveAPClientMonitor(const String &apSSID, const uint8_t *targetMAC, uint8_t channel);
+
 // Channel detection - shared with wifi_atks
 int getAPChannel(const uint8_t *target_bssid, bool *found = nullptr);
 

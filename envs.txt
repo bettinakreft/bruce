@@ -1,0 +1,17 @@
+12: default_envs =
+60: 	; lilygo-t4
+61: 	; lilygo-t-deck
+62: 	; lilygo-t-deck-pro
+63: 	; lilygo-t-display-c5
+64: 	; lilygo-t-display-s3
+65: 	; lilygo-t-display-s3-mmc
+66: 	; lilygo-t-display-S3-pro
+67: 	; lilygo-t-display-s3-touch
+68: 	; lilygo-t-display-s3-touch-mmc
+69: 	; lilygo-t-display-ttgo
+70: 	; lilygo-t-embed
+71: 	; lilygo-t-embed-cc1101
+72: 	; lilygo-t-hmi
+73: 	; lilygo-t-lora-pager
+74: 	; lilygo-t-watch-s3
+110: extra_configs =

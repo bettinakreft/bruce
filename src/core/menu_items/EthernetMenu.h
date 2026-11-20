@@ -1,9 +1,9 @@
 #ifndef __Ethernet_MENU_H__
 #define __Ethernet_MENU_H__
 
-#include "modules/ethernet/EthernetHelper.h"
 #include <MenuItemInterface.h>
-#if !defined(LITE_VERSION)
+#if !defined(LITE_VERSION) && !defined(DISABLE_ETHERNET)
+#include "modules/ethernet/EthernetHelper.h"
 class EthernetMenu : public MenuItemInterface {
 private:
     EthernetHelper *eth;

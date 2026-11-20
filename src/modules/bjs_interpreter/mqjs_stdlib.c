@@ -553,6 +553,7 @@ static const JSPropDef js_mic[] = {
 
 const JSClassDef js_mic_obj = JS_OBJECT_DEF("Mic", js_mic);
 
+#ifndef DISABLE_RFID
 /* Rfid module */
 static const JSPropDef js_rfid[] = {
     JS_CFUNC_DEF("read", 1, native_rfidRead),
@@ -574,6 +575,7 @@ static const JSPropDef js_rfid[] = {
 };
 
 const JSClassDef js_rfid_obj = JS_OBJECT_DEF("Rfid", js_rfid);
+#endif
 
 /* Runtime module */
 static const JSPropDef js_runtime[] = {
@@ -864,7 +866,9 @@ static const JSPropDef js_global_object[] = {
     JS_PROP_CLASS_DEF("keyboard", &js_keyboard_obj),
     JS_PROP_CLASS_DEF("notification", &js_notification_obj),
     JS_PROP_CLASS_DEF("mic", &js_mic_obj),
+#ifndef DISABLE_RFID
     JS_PROP_CLASS_DEF("rfid", &js_rfid_obj),
+#endif
     JS_PROP_CLASS_DEF("runtime", &js_runtime_obj),
     JS_PROP_CLASS_DEF("serial", &js_serial_obj),
     JS_PROP_CLASS_DEF("storage", &js_storage_obj),

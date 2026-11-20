@@ -760,11 +760,13 @@ void ledPreviewMode(bool enable) {
 void setLedBrightnessConfig() {
     int idx = 0;
     if (bruceConfig.ledBright == 0) idx = 0;
-    else if (bruceConfig.ledBright == 10) idx = 1;
-    else if (bruceConfig.ledBright == 25) idx = 2;
-    else if (bruceConfig.ledBright == 50) idx = 3;
-    else if (bruceConfig.ledBright == 75) idx = 4;
-    else if (bruceConfig.ledBright == 100) idx = 5;
+    else if (bruceConfig.ledBright == 2) idx = 1;
+    else if (bruceConfig.ledBright == 5) idx = 2;
+    else if (bruceConfig.ledBright == 10) idx = 3;
+    else if (bruceConfig.ledBright == 25) idx = 4;
+    else if (bruceConfig.ledBright == 50) idx = 5;
+    else if (bruceConfig.ledBright == 75) idx = 6;
+    else if (bruceConfig.ledBright == 100) idx = 7;
 
     options = {
         {"OFF",
@@ -772,6 +774,20 @@ void setLedBrightnessConfig() {
          bruceConfig.ledBright == 0,
          [](void *pointer, bool shouldRender) {
              setLedBrightness(0);
+             return false;
+         }},
+        {"2 %",
+         [=]() { bruceConfig.setLedBright(2); },
+         bruceConfig.ledBright == 2,
+         [](void *pointer, bool shouldRender) {
+             setLedBrightness(2);
+             return false;
+         }},
+        {"5 %",
+         [=]() { bruceConfig.setLedBright(5); },
+         bruceConfig.ledBright == 5,
+         [](void *pointer, bool shouldRender) {
+             setLedBrightness(5);
              return false;
          }},
         {"10 %",

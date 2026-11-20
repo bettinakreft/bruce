@@ -25,6 +25,7 @@ struct themeFiles {
     String boot_img = "";
     String boot_sound = "";
     String lora = "";
+    String bw16 = "";
     String wire = "";
 };
 
@@ -52,6 +53,7 @@ struct themeInfo {
     bool boot_img = false;
     bool boot_sound = false;
     bool lora = false;
+    bool bw16 = false;
     bool wire = false;
     int gifDuration = 0;
 

@@ -8,7 +8,9 @@
 #include "led_commands.h"
 #include "power_commands.h"
 #include "rf_commands.h"
+#ifndef DISABLE_RFID
 #include "rfid_commands.h"
+#endif
 #include "screen_commands.h"
 #include "settings_commands.h"
 #include "sound_commands.h"
@@ -41,7 +43,9 @@ void SerialCli::setup() {
     createIrCommands(&_cli);
     createPowerCommands(&_cli);
     createRfCommands(&_cli);
+#ifndef DISABLE_RFID
     createRfidCommands(&_cli);
+#endif
     createSettingsCommands(&_cli);
     createStorageCommands(&_cli);
     createUtilCommands(&_cli);

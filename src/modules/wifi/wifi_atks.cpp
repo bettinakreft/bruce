@@ -10,6 +10,7 @@
 #include "core/sd_functions.h"
 #include "core/utils.h"
 #include "core/wifi/wifi_common.h"
+#include "deauther.h"
 #include "esp_system.h"
 #include "esp_wifi.h"
 #include "evil_portal.h"
@@ -103,13 +104,11 @@ uint8_t channelIndex = 0;
 uint8_t wifi_channel = 1;
 
 void nextChannel() {
-    const uint8_t channels[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11};
     const size_t nChannels = sizeof(channels) / sizeof(channels[0]);
-    static uint8_t channelIndex = 0;
 
     channelIndex = (channelIndex + 1) % nChannels;
-    uint8_t ch = channels[channelIndex];
-    esp_wifi_set_channel(ch, WIFI_SECOND_CHAN_NONE);
+    wifi_channel = channels[channelIndex];
+    esp_wifi_set_channel(wifi_channel, WIFI_SECOND_CHAN_NONE);
 }
 
 /***************************************************************************************
@@ -549,7 +548,9 @@ ATTACK_MENU:
                                }});
 
             addOptionToMainMenu();
-            myCursor = loopOptions(options, myCursor);
+            myCursor = loopOptions(
+                options, MENU_TYPE_REGULAR, "", myCursor, false, false, static_cast<uint16_t>(options.size())
+            );
 
             // DIEU HUONG
             if (myCursor < 0 || (returnToMenu && myCursor == (int)options.size() - 1)) {
@@ -636,10 +637,10 @@ void deauthFloodAttack() {
 
     tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
     tft.setTextSize(FP);
-    tft.setCursor(10, 45);
+    tft.setCursor(10, 65);
     tft.print("Targets: " + String(targets.size()) + " APs");
 
-    tft.setCursor(10, 65);
+    tft.setCursor(10, 85);
     tft.setTextColor(TFT_RED, bruceConfig.bgColor);
     tft.print("Status: FLOODING...");
 
@@ -1149,6 +1150,12 @@ void target_atk_menu(String tssid, String mac, uint8_t channel) {
 AGAIN:
     options = {
         {"Deauth",              [=]() { target_atk(tssid, mac, channel); }         },
+        {"Precious Deauth",
+         [=]() {
+             uint8_t targetBSSID[6];
+             stringToMAC(std::string(mac.c_str()), targetBSSID);
+             passiveAPClientMonitor(tssid, targetBSSID, channel);
+         }                                                                         },
         {"Capture Handshake",   [=]() { capture_handshake(tssid, mac, channel); }  },
         {"Clone Portal",        [=]() { EvilPortal(tssid, channel, false, false); }},
         {"Deauth+Clone",        [=]() { EvilPortal(tssid, channel, true, false); } },
@@ -1195,7 +1202,7 @@ void target_atk(String tssid_unused, String mac_unused, uint8_t channel_unused) 
     tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
     tft.setTextSize(FP);
 
-    tft.setCursor(10, 45);
+    tft.setCursor(10, 65);
     if (selected_targets.size() == 1) {
         String tssid = String((char *)selected_targets[0].ssid);
         tft.print("Target: " + (tssid.isEmpty() ? String("<Hidden>") : tssid));
@@ -1203,7 +1210,7 @@ void target_atk(String tssid_unused, String mac_unused, uint8_t channel_unused) 
         tft.print("Targets: " + String(selected_targets.size()) + " Mesh APs");
     }
 
-    tft.setCursor(10, 65);
+    tft.setCursor(10, 85);
     tft.setTextColor(TFT_RED, bruceConfig.bgColor);
     tft.print("Status: ATTACKING...");
 
@@ -1271,16 +1278,15 @@ void target_atk(String tssid_unused, String mac_unused, uint8_t channel_unused) 
 }
 
 void generateRandomWiFiMac(uint8_t *mac) {
-    for (int i = 1; i < 6; i++) { mac[i] = random(0, 255); }
+    for (int i = 0; i < 6; i++) { mac[i] = static_cast<uint8_t>(random(0, 256)); }
+    mac[0] = (mac[0] & 0xFE) | 0x02;
 }
-
 char randomName[32];
 char *randomSSID() {
     const char *charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
-    int len = rand() % 22 + 7; // Generate a random length between 1 and 10
-    for (int i = 0; i < len; ++i) {
-        randomName[i] = charset[rand() % strlen(charset)]; // S elect random characters from the charset
-    }
+    const size_t charsetLength = strlen(charset);
+    const size_t len = static_cast<size_t>(random(7, 29));
+    for (size_t i = 0; i < len; ++i) { randomName[i] = charset[random(0, static_cast<long>(charsetLength))]; }
     randomName[len] = '\0'; // Null-terminate the string
     return randomName;
 }
@@ -1383,7 +1389,7 @@ void beaconSpamList(const char list[], bool fromProgmem = false) {
         );
 
         for (int k = 0; k < 2; k++) {
-            esp_wifi_80211_tx(WIFI_IF_STA, beaconPacket, BEACON_PKT_LEN, 0);
+            esp_wifi_80211_tx(WIFI_IF_AP, beaconPacket, BEACON_PKT_LEN, false);
             vTaskDelay(1 / portTICK_PERIOD_MS);
         }
 
@@ -1412,7 +1418,7 @@ void beaconSpamSingle(String baseSSID) {
 
         // send 2 packets
         for (int k = 0; k < 2; k++) {
-            esp_wifi_80211_tx(WIFI_IF_STA, beaconPacket, BEACON_PKT_LEN, 0);
+            esp_wifi_80211_tx(WIFI_IF_AP, beaconPacket, BEACON_PKT_LEN, false);
             vTaskDelay(1 / portTICK_PERIOD_MS);
         }
 
@@ -1434,7 +1440,7 @@ void beaconAttack() {
     // create empty SSID
     for (int i = 0; i < 32; i++) emptySSID[i] = ' ';
     // for random generator
-    randomSeed(1);
+    randomSeed(esp_random());
     options = {
         {"Funny SSID",
          [&]() {

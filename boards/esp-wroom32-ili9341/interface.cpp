@@ -71,8 +71,10 @@ void _setup_gpio() {
     digitalWrite(bruceConfigPins.CC1101_bus.cs, HIGH);
     pinMode(bruceConfigPins.NRF24_bus.cs, OUTPUT);
     digitalWrite(bruceConfigPins.NRF24_bus.cs, HIGH);
-    pinMode(bruceConfigPins.NRF24_bus.io0, OUTPUT);
-    digitalWrite(bruceConfigPins.NRF24_bus.io0, LOW);
+    pinMode(bruceConfigPins.SDCARD_bus.cs, OUTPUT);
+    digitalWrite(bruceConfigPins.SDCARD_bus.cs, HIGH);
+    // pinMode(bruceConfigPins.NRF24_bus.io0, OUTPUT);
+    // digitalWrite(bruceConfigPins.NRF24_bus.io0, LOW);
 }
 
 /***************************************************************************************
@@ -115,38 +117,7 @@ void powerOff() {
 ** location: mykeyboard.cpp
 ** Btn logic to turn off the device
 **********************************************************************/
-void checkReboot() {
-    int countDown = 0;
-    /* Long press Left+Right to power off */
-    if (digitalRead(L_BTN) == BTN_ACT && digitalRead(R_BTN) == BTN_ACT) {
-        uint32_t time_count = millis();
-        while (digitalRead(L_BTN) == BTN_ACT && digitalRead(R_BTN) == BTN_ACT) {
-            if (millis() - time_count > 500) {
-                if (countDown == 0) {
-                    int textWidth = tft.textWidth("RESTART IN 3/3", 1);
-                    tft.fillRect(tftWidth / 2 - textWidth / 2, 7, textWidth, 18, bruceConfig.bgColor);
-                }
-                tft.setTextSize(1);
-                tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
-                countDown = (millis() - time_count) / 1000 + 1;
-                if (countDown < 4)
-                    tft.drawCentreString("RESTART IN " + String(countDown) + "/3", tftWidth / 2, 12, 1);
-                else {
-                    tft.fillScreen(bruceConfig.bgColor);
-                    while (digitalRead(L_BTN) == BTN_ACT || digitalRead(R_BTN) == BTN_ACT);
-                    delay(200);
-                    ESP.restart();
-                }
-                delay(10);
-            }
-        }
-        delay(30);
-        if (millis() - time_count > 500) {
-            tft.fillRect(60, 12, tftWidth - 60, tft.fontHeight(1), bruceConfig.bgColor);
-            drawStatusBar();
-        }
-    }
-}
+void checkReboot() {}
 
 int getBattery() {
     static bool adcInit = false;

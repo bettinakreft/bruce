@@ -6,21 +6,26 @@
 MainMenu::MainMenu() {
     _menuItems = {
         &wifiMenu,
+        &bw16Menu,
         &bleMenu,
         &rfMenu,
         &nrf24Menu,
 #if !defined(LITE_VERSION)
         &loraMenu,
 #endif
-#if !defined(LITE_VERSION)
+#if !defined(LITE_VERSION) && !defined(DISABLE_FM)
         &fmMenu,
 #endif
         &irMenu,
-#if !defined(LITE_VERSION)
+#if !defined(LITE_VERSION) && !defined(DISABLE_ETHERNET)
         &ethernetMenu,
 #endif
+#ifndef DISABLE_GPS
         &gpsMenu,
+#endif
+#ifndef DISABLE_RFID
         &rfidMenu,
+#endif
         &fileMenu,
 #if !defined(LITE_VERSION) && !defined(DISABLE_INTERPRETER)
         &scriptsMenu,

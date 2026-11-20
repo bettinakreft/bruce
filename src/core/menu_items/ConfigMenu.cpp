@@ -302,7 +302,9 @@ void ConfigMenu::pinsMenu() {
             {"NRF24  Pins",    [this]() { setSPIPinsMenu(bruceConfigPins.NRF24_bus); }  },
 #if !defined(LITE_VERSION)
             {"LoRa Pins",      [this]() { setSPIPinsMenu(bruceConfigPins.LoRa_bus); }   },
+#ifndef DISABLE_RFID
             {"ST25R3916 Pins", [this]() { setSPIPinsMenu(bruceConfigPins.ST25R_bus); }  },
+#endif
             {"W5500 Pins",     [this]() { setSPIPinsMenu(bruceConfigPins.W5500_bus); }  },
 #endif
             {"SDCard Pins",    [this]() { setSPIPinsMenu(bruceConfigPins.SDCARD_bus); } },

