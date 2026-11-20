@@ -126,6 +126,9 @@ jobs:
     name: Update Placeholders
     runs-on: ubuntu-latest
     environment: github_release
+    permissions:
+      actions: write
+      contents: write
     needs: compile_sketch
     if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') || github.ref_type == 'tag'
     steps:

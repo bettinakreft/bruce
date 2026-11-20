@@ -11,7 +11,7 @@ on:
       environment:
         description: 'Select environment to build'
         required: true
-        default: 'lilygo-t-embed-cc1101'
+        default: 'esp-wroom32-ili9341'
         type: choice
         options:
           - "arduino-nesso-n1"
