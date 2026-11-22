@@ -122,29 +122,6 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
-  post_compile_steps:
-    name: Trigger WebPage Deploy
-    runs-on: ubuntu-latest
-    permissions:
-      actions: write
-    needs: compile_sketch
-    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') || github.ref_type == 'tag'
-    steps:
-      - name: Checkout main to trigger WebPage deploy
-        if: ${{ success() }}
-        uses: actions/checkout@v4
-        with:
-          ref: main
-          fetch-depth: 1
-
-      - name: Trigger WebPage deploy (workflow_dispatch)
-        if: ${{ success() }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh workflow list
-          gh workflow run .github/workflows/deploy.yml --ref WebPage
-
   create_release:
     runs-on: ubuntu-latest
     environment: github_release
