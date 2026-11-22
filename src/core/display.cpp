@@ -1,7 +1,7 @@
 #include "display.h"
-#include "hal/power/gauge.h"
 #include "core/wifi/webInterface.h" // for server
 #include "core/wifi/wg.h"           //for isConnectedWireguard to print wireguard lock
+#include "hal/power/gauge.h"
 #include "mykeyboard.h"
 #include "settings.h" //for timeStr
 #include "utils.h"
@@ -1187,9 +1187,7 @@ void drawSubmenu(int index, std::vector<Option> &options, const char *title) {
     tft.drawString(title, BORDER_PAD_X, STATUS_BAR_HEIGHT);
 
     auto rgb565 = [](uint8_t r, uint8_t g, uint8_t b) -> uint16_t {
-        return static_cast<uint16_t>(((r & 0xF8) << 8) |
-                                     ((g & 0xFC) << 3) |
-                                     (b >> 3));
+        return static_cast<uint16_t>(((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3));
     };
 
     auto mixColor = [&](uint16_t a, uint16_t b, uint8_t amount) -> uint16_t {
@@ -1227,12 +1225,10 @@ void drawSubmenu(int index, std::vector<Option> &options, const char *title) {
 
         tft.drawRoundRect(x, y, w, h, 5, borderColor);
 
-        const uint16_t gradientStart = selected
-            ? mixColor(background, background, 45)
-            : mixColor(background, secondary, 18);
-        const uint16_t gradientEnd = selected
-            ? mixColor(background, background, 45)
-            : mixColor(background, secondary, 55);
+        const uint16_t gradientStart =
+            selected ? mixColor(background, background, 45) : mixColor(background, secondary, 18);
+        const uint16_t gradientEnd =
+            selected ? mixColor(background, background, 45) : mixColor(background, secondary, 55);
 
         const int innerX = x + 2;
         const int innerY = y + 2;
@@ -1261,18 +1257,26 @@ void drawSubmenu(int index, std::vector<Option> &options, const char *title) {
     }
 
     // Thin scrollbar on the right shows the current position in the submenu.
-    tft.fillRect(tftWidth - BORDER_OFFSET_FROM_SCREEN_EDGE, 0,
-                 BORDER_OFFSET_FROM_SCREEN_EDGE, tftHeight, background);
+    tft.fillRect(
+        tftWidth - BORDER_OFFSET_FROM_SCREEN_EDGE, 0, BORDER_OFFSET_FROM_SCREEN_EDGE, tftHeight, background
+    );
     const int indicatorH = max(4, tftHeight / menuSize);
     const int indicatorY = (index * (tftHeight - indicatorH)) / max(1, menuSize - 1);
-    tft.fillRoundRect(tftWidth - BORDER_OFFSET_FROM_SCREEN_EDGE, indicatorY,
-                      BORDER_OFFSET_FROM_SCREEN_EDGE, indicatorH, 2, primary);
+    tft.fillRoundRect(
+        tftWidth - BORDER_OFFSET_FROM_SCREEN_EDGE,
+        indicatorY,
+        BORDER_OFFSET_FROM_SCREEN_EDGE,
+        indicatorH,
+        2,
+        primary
+    );
 
 #if defined(HAS_TOUCH)
     tft.setTextColor(getColorVariation(bruceConfig.priColor), bruceConfig.bgColor);
     int escW = 5 * LW * FM + 4;
-    tft.drawString("[ x ]", tftWidth - BORDER_OFFSET_FROM_SCREEN_EDGE - 2 - escW,
-                   BORDER_OFFSET_FROM_SCREEN_EDGE + 2, 1);
+    tft.drawString(
+        "[ x ]", tftWidth - BORDER_OFFSET_FROM_SCREEN_EDGE - 2 - escW, BORDER_OFFSET_FROM_SCREEN_EDGE + 2, 1
+    );
     TouchFooter();
 #endif
 }
@@ -1462,21 +1466,29 @@ void drawBatteryStatus(uint8_t bat) {
 
     uint16_t color = bruceConfig.priColor;
     uint16_t barcolor = bruceConfig.priColor;
-    if (bat < 16) barcolor = color = TFT_RED;
+    if (bat < 25) barcolor = color = TFT_RED;
 
-    const int battH = STATUS_BAR_HEIGHT - (5 + BORDER_OFFSET_FROM_SCREEN_EDGE + FP * 2);
-    const int battW = 2 * battH;
-    const int battY = BORDER_OFFSET_FROM_SCREEN_EDGE + FP;
-    const int battX = tftWidth - BORDER_OFFSET_FROM_SCREEN_EDGE - battW - FP;
-    const int insetX = FP;
-    const int insetY = FP;
+    // --- PERBAIKAN FORMULA UNTUK UKURAN & POSISI PRESISI ---
+    // Mengurangi tinggi ikon dari 18 menjadi 14 piksel agar tidak menyentuh garis bawah
+    const int battH = STATUS_BAR_HEIGHT - (5 + BORDER_OFFSET_FROM_SCREEN_EDGE + FP * 2 + 4);
+    const int battW = 2 * battH; // Lebar otomatis menyesuaikan menjadi 28 piksel
+
+    // Menaikkan posisi Y ke koordinat 7 agar simetris (Tengah-tengah secara vertikal)
+    const int battY = BORDER_OFFSET_FROM_SCREEN_EDGE + FP + 2;
+    // -------------------------------------------------------
+
+    const int battX = tftWidth - BORDER_OFFSET_FROM_SCREEN_EDGE - battW - FP - 2;
+    const int insetX = FP + 1;
+    const int insetY = FP + 1;
     const int barW = battW - 2 * insetX;
     const int barH = battH - 2 * insetY;
     const int textGap = FP + 3;
     const int textClearW = 4 * LW * FP + 4; // fits "100%" / "CHG"
 
     tft.fillRect(battX - textGap - textClearW, battY, textClearW, battH + 1, bruceConfig.bgColor);
-    int textY = BORDER_PAD_X; // top-align with the clock/version text drawn at BORDER_PAD_X
+
+    // Menyelaraskan teks persentase agar pas di tengah vertikal bersama ikon
+    int textY = BORDER_PAD_X + 1;
 
     tft.setTextSize(FP);
     if (charging) {

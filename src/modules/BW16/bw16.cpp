@@ -563,15 +563,22 @@ void BW16Tool::send_attack_command(String type) {
 
     uint32_t tmp = millis();
     uint16_t count = 0;
-    uint8_t current_channel = 0;
+    uint8_t current_channel = static_cast<uint8_t>(targetChannel > 0 ? targetChannel : 0);
+    bool stopRequested = false;
 
     BW16Serial->println(type);
-    while (true) {
+    while (!stopRequested) {
         if (espActive) {
             for (const auto &rec : espTargets) {
                 if (current_channel != rec.channel) {
                     esp_wifi_set_channel(rec.channel, WIFI_SECOND_CHAN_NONE);
                     current_channel = rec.channel;
+
+                    tft.fillRect(leftX, 76, maxTextW, 12, bruceConfig.bgColor);
+                    tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
+                    tft.setCursor(leftX, 76);
+                    tft.print(fitTextToWidth("CH: " + String(current_channel), maxTextW));
+
                     vTaskDelay(2 / portTICK_PERIOD_MS);
                 }
 
@@ -590,10 +597,13 @@ void BW16Tool::send_attack_command(String type) {
                     delayMicroseconds(5);
                 }
 
-                if (check(SelPress)) break;
+                if (check(SelPress)) {
+                    stopRequested = true;
+                    break;
+                }
             }
 
-            if (millis() - tmp >= 1000) {
+            if (!stopRequested && millis() - tmp >= 1000) {
                 tft.fillRect(leftX, 104, maxTextW, 12, bruceConfig.bgColor);
                 tft.setCursor(leftX, 104);
                 tft.setTextColor(TFT_GREEN, bruceConfig.bgColor);
@@ -604,10 +614,19 @@ void BW16Tool::send_attack_command(String type) {
             }
         }
 
-        if (check(SelPress)) {
+        if (stopRequested || check(SelPress)) {
+            stopRequested = true;
             if (espActive) esp_wifi_set_promiscuous(false);
             BW16Serial->println("STOP");
+
+            tft.fillRect(leftX, stopY, maxTextW, 12, bruceConfig.bgColor);
+            tft.setTextColor(TFT_YELLOW, bruceConfig.bgColor);
+            tft.setCursor(leftX, stopY);
+            tft.print(fitTextToWidth("Stopping...", maxTextW));
+
             vTaskDelay(200 / portTICK_PERIOD_MS);
+            while (check(SelPress)) { vTaskDelay(20 / portTICK_PERIOD_MS); }
+            returnToMenu = true;
             break;
         }
         vTaskDelay(10 / portTICK_PERIOD_MS);
