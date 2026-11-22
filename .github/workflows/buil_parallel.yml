@@ -126,7 +126,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: github_release
     needs: [compile_sketch]
-    if: github.ref_type == 'tag'
+    if: github.ref_type == 'tag' || github.ref == 'refs/heads/main'
     permissions:
       contents: write
     steps:
@@ -138,7 +138,7 @@ jobs:
           if [[ "${{ github.ref_type }}" == "tag" ]]; then
             version=${{ github.ref_name }}
           else
-            version="${GITHUB_SHA::7}"
+            version="main-${GITHUB_SHA::7}"
           fi
 
           echo "version=${version}" > $GITHUB_OUTPUT

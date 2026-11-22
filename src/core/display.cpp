@@ -742,12 +742,18 @@ int loopOptions(
 #endif
 
         if (pageJumpSize > 0) {
-            if (check(NextPagePress)) {
+            // File-browser menus use left/right for paging while up/down
+            // continues to move the selection one item at a time.
+            check(NextPagePress);
+            check(PrevPagePress);
+            bool nextPage = check(NextPress);
+            bool prevPage = check(PrevPress);
+            if (nextPage) {
                 index += pageJumpSize;
                 if (index >= static_cast<int>(options.size())) index = static_cast<int>(options.size()) - 1;
                 redraw = true;
             }
-            if (check(PrevPagePress)) {
+            if (!nextPage && prevPage) {
                 index -= pageJumpSize;
                 if (index < 0) index = 0;
                 redraw = true;
