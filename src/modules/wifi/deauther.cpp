@@ -1242,9 +1242,9 @@ void passiveAPClientMonitor(const String &apSSID, const uint8_t *targetMAC, uint
     drawMainBorderWithTitle("PRECIOUS DEAUTH");
     tft.setTextSize(FP);
     tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
-    tft.setCursor(10, 46);
+    tft.setCursor(10, 66);
     tft.printf("AP: %s", apSSID.c_str());
-    tft.setCursor(10, 60);
+    tft.setCursor(10, 80);
     tft.printf(
         "MAC: %02X:%02X:%02X:%02X:%02X:%02X",
         targetMAC[0],
@@ -1254,7 +1254,7 @@ void passiveAPClientMonitor(const String &apSSID, const uint8_t *targetMAC, uint
         targetMAC[4],
         targetMAC[5]
     );
-    tft.setCursor(10, 74);
+    tft.setCursor(10, 94);
     tft.printf("Channel: %u", channel);
 
     tft.setCursor(10, tftHeight - 18);
@@ -1266,8 +1266,8 @@ void passiveAPClientMonitor(const String &apSSID, const uint8_t *targetMAC, uint
     uint8_t broadcastMAC[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
     unsigned long initialDeauthStart = millis();
 
-    // Kirim paket deauth secara terus-menerus selama 2 detik di awal
-    while (millis() - initialDeauthStart < 5000) {
+    // Kirim paket deauth secara terus-menerus selama 10 detik di awal
+    while (millis() - initialDeauthStart < 10000) {
         if (check(EscPress)) break;
         sendSingleDeauthPacket(targetMAC, broadcastMAC);
         delay(20); // Jeda 20ms antar paket agar stabil dan tidak membuat buffer Wi-Fi penuh/crash
@@ -1339,7 +1339,7 @@ void passiveAPClientMonitor(const String &apSSID, const uint8_t *targetMAC, uint
                 // Jika aktif dan belum di-pause, kirim deauth setiap kali klien mencoba connect lagi
                 if (shouldDeauth && !deauthPaused) {
                     unsigned long secondDeauthStart = millis();
-                    while (millis() - secondDeauthStart < 5000) {
+                    while (millis() - secondDeauthStart < 10000) {
                         if (check(EscPress)) break;
                         sendSingleDeauthPacket(targetMAC, broadcastMAC);
                         delay(20);
@@ -1365,31 +1365,31 @@ void passiveAPClientMonitor(const String &apSSID, const uint8_t *targetMAC, uint
                                                                             : "Auth";
 
                 // Tampilkan 1 klien terakhir di layar
-                tft.setCursor(10, 100);
+                tft.setCursor(10, 120);
                 tft.print("Last Client Attempt:");
-                tft.setCursor(10, 114);
+                tft.setCursor(10, 134);
                 tft.printf("MAC: %s", mac);
-                tft.setCursor(10, 128);
+                tft.setCursor(10, 148);
                 tft.printf("Type: %s | RSSI: %ddBm", frameName, latestClient->rssi);
-                tft.setCursor(10, 142);
+                tft.setCursor(10, 162);
                 tft.printf("Frames: %lu", static_cast<unsigned long>(latestClient->frameCount));
             } else {
                 // --- CEK IDLE 10 DETIK: JIKA TIDAK ADA KLIEN, EKSEKUSI ULANG DEAUTH AWAL ---
-                if (!deauthPaused && (currentMillis - lastClientSeen >= 15000)) {
+                if (!deauthPaused && (currentMillis - lastClientSeen >= 20000)) {
                     lastClientSeen = currentMillis;
                     tft.fillRect(6, 120, tftWidth - 12, 16, bruceConfig.bgColor);
-                    tft.setCursor(10, 120);
-                    tft.print("Re-Deauth (5s)");
+                    tft.setCursor(10, 140);
+                    tft.print("Re-Deauth (10s)");
 
                     unsigned long reDeauthStart = millis();
-                    while (millis() - reDeauthStart < 5000) {
+                    while (millis() - reDeauthStart < 10000) {
                         if (check(EscPress)) break;
                         sendSingleDeauthPacket(targetMAC, broadcastMAC);
                         delay(20);
                     }
                     tft.fillRect(6, 120, tftWidth - 12, 16, bruceConfig.bgColor);
                 }
-                tft.setCursor(10, 120);
+                tft.setCursor(10, 140);
                 tft.print("Waiting for client requests...");
             }
         }

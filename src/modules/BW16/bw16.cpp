@@ -7,10 +7,18 @@
 #include <WiFi.h>
 #include <esp_wifi.h>
 
-#define BW16_RX_PIN 3
-#define BW16_TX_PIN 1
+#define BW16_RX_PIN bruceConfigPins.gps_bus.rx
+#define BW16_TX_PIN bruceConfigPins.gps_bus.tx
 
 HardwareSerial *BW16Serial = &Serial2;
+
+static void fullStopEspWifi() {
+    esp_wifi_set_promiscuous(false);
+    esp_wifi_set_promiscuous_rx_cb(nullptr);
+    WiFi.softAPdisconnect(true);
+    WiFi.disconnect(true, true);
+    WiFi.mode(WIFI_OFF);
+}
 
 BW16Tool::BW16Tool() {}
 BW16Tool::~BW16Tool() { end(); }
@@ -31,6 +39,7 @@ bool BW16Tool::begin_bw16() {
 
 void BW16Tool::end() {
     if (!isBW16Active) return;
+    fullStopEspWifi();
     BW16Serial->end();
     restorePins();
     isBW16Active = false;
@@ -42,34 +51,6 @@ String BW16Tool::readSerialLine() {
     line = BW16Serial->readStringUntil('\n');
     line.trim();
     return line;
-}
-
-bool BW16Tool::probeConnection() {
-    while (BW16Serial->available() > 0) BW16Serial->read();
-
-    drawMainBorderWithTitle("Checking BW16");
-    padprintln("Starting WiFi scan...");
-    BW16Serial->println("SCAN");
-
-    constexpr uint32_t timeoutMs = 10000;
-    const uint32_t startTime = millis();
-    String line;
-
-    while (millis() - startTime < timeoutMs) {
-        while (BW16Serial->available() > 0) {
-            char c = BW16Serial->read();
-            if (c == '\r') continue;
-            if (c == '\n') {
-                if (line.indexOf("scan_done") != -1) return true;
-                line = "";
-            } else if (line.length() < 128) {
-                line += c;
-            }
-        }
-        vTaskDelay(pdMS_TO_TICKS(2));
-    }
-
-    return false;
 }
 
 void BW16Tool::display_banner() {
@@ -482,7 +463,15 @@ void BW16Tool::send_attack_command(String type) {
         uint8_t bssid[6];
         uint8_t channel;
     };
+
+    struct DisplayTarget {
+        String ap;
+        int channel;
+        String bssid;
+    };
+
     std::vector<EspTarget> espTargets;
+    std::vector<DisplayTarget> displayTargets;
 
     if (!selected_bssids.empty()) {
         for (auto &bssid : selected_bssids) {
@@ -493,6 +482,8 @@ void BW16Tool::send_attack_command(String type) {
                         targetSSID = net.bssid;
                         targetChannel = net.channel;
                     }
+
+                    displayTargets.push_back({net.ssid, net.channel, net.bssid});
 
                     String cleanMac = net.bssid;
                     cleanMac.replace(":", "");
@@ -522,6 +513,7 @@ void BW16Tool::send_attack_command(String type) {
     const int stopY = tftHeight - 22;
 
     bool espActive = false;
+    bool espPaused = false;
     if (!espTargets.empty()) {
         WiFi.disconnect(true);
         WiFi.mode(WIFI_STA);
@@ -530,23 +522,35 @@ void BW16Tool::send_attack_command(String type) {
         setCpuFrequencyMhz(240);
     }
 
-    tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
-    tft.setCursor(leftX, 62);
-    tft.print(fitTextToWidth("AP: " + targetAP, maxTextW));
+    auto drawTargetInfo = [&](const DisplayTarget &info) {
+        tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
 
-    tft.setCursor(leftX, 76);
-    tft.print(fitTextToWidth("CH: " + String(targetChannel), maxTextW));
+        tft.fillRect(leftX, 62, maxTextW, 12, bruceConfig.bgColor);
+        tft.setCursor(leftX, 62);
+        tft.print(fitTextToWidth("AP: " + info.ap, maxTextW));
 
-    tft.setCursor(leftX, 90);
-    tft.print(fitTextToWidth("BSSID: " + targetSSID, maxTextW));
+        tft.fillRect(leftX, 76, maxTextW, 12, bruceConfig.bgColor);
+        tft.setCursor(leftX, 76);
+        tft.print(fitTextToWidth("CH: " + String(info.channel), maxTextW));
+
+        tft.fillRect(leftX, 90, maxTextW, 12, bruceConfig.bgColor);
+        tft.setCursor(leftX, 90);
+        tft.print(fitTextToWidth("BSSID: " + info.bssid, maxTextW));
+    };
+
+    if (!displayTargets.empty()) {
+        drawTargetInfo(displayTargets[0]);
+    } else {
+        drawTargetInfo({targetAP, targetChannel, targetSSID});
+    }
 
     tft.setCursor(leftX, 104);
     if (espActive) {
-        tft.setTextColor(TFT_GREEN, bruceConfig.bgColor);
-        tft.print(fitTextToWidth("ESP Atk: ON (" + String((int)espTargets.size()) + ")", maxTextW));
+        tft.setTextColor(TFT_RED, bruceConfig.bgColor);
+        tft.print(fitTextToWidth("ESP : ON (" + String((int)espTargets.size()) + ")", maxTextW));
     } else {
         tft.setTextColor(TFT_YELLOW, bruceConfig.bgColor);
-        tft.print(fitTextToWidth("ESP Atk: OFF", maxTextW));
+        tft.print(fitTextToWidth("ESP : OFF", maxTextW));
     }
 
     tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
@@ -562,22 +566,53 @@ void BW16Tool::send_attack_command(String type) {
                           0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x07, 0x00};
 
     uint32_t tmp = millis();
+    uint32_t lastCycleMs = millis();
+    size_t displayIdx = 0;
     uint16_t count = 0;
     uint8_t current_channel = static_cast<uint8_t>(targetChannel > 0 ? targetChannel : 0);
     bool stopRequested = false;
 
     BW16Serial->println(type);
     while (!stopRequested) {
-        if (espActive) {
+        if (displayTargets.size() > 1 && millis() - lastCycleMs >= 1000) {
+            lastCycleMs = millis();
+            displayIdx = (displayIdx + 1) % displayTargets.size();
+            drawTargetInfo(displayTargets[displayIdx]);
+        }
+        if (espActive && check(NextPress)) {
+            espPaused = !espPaused;
+            if (espPaused) {
+                esp_wifi_set_promiscuous(false);
+                tft.fillRect(leftX, 104, maxTextW, 12, bruceConfig.bgColor);
+                tft.setCursor(leftX, 104);
+                tft.setTextColor(TFT_YELLOW, bruceConfig.bgColor);
+                tft.print(fitTextToWidth("ESP : PAUSED", maxTextW));
+            } else {
+                esp_wifi_set_promiscuous(true);
+                current_channel = 0; // paksa sinkronisasi ulang kanal saat resume
+                count = 0;
+                tmp = millis();
+                tft.fillRect(leftX, 104, maxTextW, 12, bruceConfig.bgColor);
+                tft.setCursor(leftX, 104);
+                tft.setTextColor(TFT_RED, bruceConfig.bgColor);
+                tft.print(fitTextToWidth("ESP : RESUMED", maxTextW));
+            }
+            tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
+            vTaskDelay(120 / portTICK_PERIOD_MS);
+            while (check(NextPress)) { vTaskDelay(20 / portTICK_PERIOD_MS); }
+        }
+        if (espActive && !espPaused) {
             for (const auto &rec : espTargets) {
                 if (current_channel != rec.channel) {
                     esp_wifi_set_channel(rec.channel, WIFI_SECOND_CHAN_NONE);
                     current_channel = rec.channel;
 
-                    tft.fillRect(leftX, 76, maxTextW, 12, bruceConfig.bgColor);
-                    tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
-                    tft.setCursor(leftX, 76);
-                    tft.print(fitTextToWidth("CH: " + String(current_channel), maxTextW));
+                    if (displayTargets.size() <= 1) {
+                        tft.fillRect(leftX, 76, maxTextW, 12, bruceConfig.bgColor);
+                        tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
+                        tft.setCursor(leftX, 76);
+                        tft.print(fitTextToWidth("CH: " + String(current_channel), maxTextW));
+                    }
 
                     vTaskDelay(2 / portTICK_PERIOD_MS);
                 }
@@ -606,8 +641,8 @@ void BW16Tool::send_attack_command(String type) {
             if (!stopRequested && millis() - tmp >= 1000) {
                 tft.fillRect(leftX, 104, maxTextW, 12, bruceConfig.bgColor);
                 tft.setCursor(leftX, 104);
-                tft.setTextColor(TFT_GREEN, bruceConfig.bgColor);
-                tft.print(fitTextToWidth("ESP Atk: ON (" + String(count) + "/s)", maxTextW));
+                tft.setTextColor(TFT_RED, bruceConfig.bgColor);
+                tft.print(fitTextToWidth("ESP : ON (" + String(count) + "/s)", maxTextW));
                 tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
                 count = 0;
                 tmp = millis();
@@ -617,14 +652,12 @@ void BW16Tool::send_attack_command(String type) {
         if (stopRequested || check(SelPress)) {
             stopRequested = true;
             if (espActive) esp_wifi_set_promiscuous(false);
+            fullStopEspWifi();
             BW16Serial->println("STOP");
 
-            tft.fillRect(leftX, stopY, maxTextW, 12, bruceConfig.bgColor);
-            tft.setTextColor(TFT_YELLOW, bruceConfig.bgColor);
-            tft.setCursor(leftX, stopY);
-            tft.print(fitTextToWidth("Stopping...", maxTextW));
+            displayError("Stopping...");
 
-            vTaskDelay(200 / portTICK_PERIOD_MS);
+            vTaskDelay(500 / portTICK_PERIOD_MS);
             while (check(SelPress)) { vTaskDelay(20 / portTICK_PERIOD_MS); }
             returnToMenu = true;
             break;
